@@ -9,11 +9,7 @@ Cryo Sentinel is an industrial-grade, tamper-resistant cold chain tracking devic
 
 ---
 
-## 3D Device Visualization
 
-![Cryo Sentinel 3D PCB Render](docs/images/pcb_3d_render.png)
-
----
 
 ## The Cryo Sentinel Advantage
 
@@ -328,3 +324,9 @@ Test the firmware logic and threshold triggers without physical hardware using t
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 3D Device Visualization
+
+![Cryo Sentinel 3D PCB Render](docs/images/pcb_3d_isolated.png)
