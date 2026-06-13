@@ -140,7 +140,7 @@ The dashboard displays real-time state changes as the cargo travels, transitioni
 #### 🔌 PCB Design & Schematic Layout
 * **Schematic Design Layout**: Below is the fully updated schematic overview for pinouts, bus routing, and secure element integration.
   
-  ![Cryo Sentinel Schematic](docs/images/kicad_schematic_collage.png)
+  ![Cryo Sentinel Schematic](docs/images/kicad_schematic.svg)
 
 * **PCB Layout View**: Rendered 2D board view demonstrating compact trace routing, component grouping, and antenna placement.
   
@@ -204,55 +204,43 @@ stateDiagram-v2
 Every alert transmitted by the device contains cryptographic signatures to guarantee data authenticity and prevent record tampering.
 
 ```mermaid
-sequenceDiagram
-    autonumber
+graph LR
+    %% Styles
+    classDef hardware fill:#1E293B,stroke:#3B82F6,stroke-width:2px,color:#fff,rx:8px,ry:8px;
+    classDef cloud fill:#334155,stroke:#10B981,stroke-width:2px,color:#fff,rx:8px,ry:8px;
+
+    %% Hardware Components
+    subgraph Edge_Device [Cryo Sentinel Edge Hardware]
+        direction TB
+        Sensors[Temp / Shock / GPS]:::hardware
+        MCU[ESP32-C3 Processor]:::hardware
+        Crypto[ATECC608A Secure Element]:::hardware
+        Flash[RTC Memory / Flash Ledger]:::hardware
+        LoRa[SX1262 Transceiver]:::hardware
+    end
+
+    %% Cloud Components
+    subgraph Cloud_Backend [Enterprise Cloud Infrastructure]
+        direction TB
+        TTN[The Things Network]:::cloud
+        FastAPI[Python FastAPI Backend]:::cloud
+        Dash[Live Web Dashboard]:::cloud
+    end
+
+    %% Flow
+    Sensors -- "1. Raw Telemetry" --> MCU
+    MCU -- "2. Hash Generation" --> Flash
+    MCU -- "3. Signature Request" --> Crypto
+    Crypto -- "4. ECDSA P-256 Signature" --> MCU
+    MCU -- "5. Cayenne LPP Payload" --> LoRa
     
-    box rgb(20, 30, 40) "Edge Hardware (Cryo Sentinel)"
-    participant Sensor as I2C/SPI Sensors
-    participant MCU as ESP32-C3 Core
-    participant Crypto as ATECC608A
-    participant Storage as RTC Memory / Flash
-    participant LoRa as SX1262 LoRaWAN
-    participant NFC as ST25DV Tag
-    end
+    LoRa -- "6. LoRaWAN 865MHz" --> TTN
+    
+    TTN -- "7. Webhook Event" --> FastAPI
+    FastAPI -- "8. WebSocket Stream" --> Dash
 
-    box rgb(30, 20, 20) "Cloud Infrastructure"
-    participant Gateway as TTN Gateway
-    participant Backend as FastAPI Backend
-    participant Dash as Web Dashboard
-    end
-
-    rect rgb(30, 40, 50)
-        Note right of Sensor: 1. Environmental Audit
-        MCU->>Sensor: Wake & Request Telemetry
-        Sensor-->>MCU: Temp, Humidity, Shock, GPS
-        MCU->>MCU: Cayenne LPP Binary Formatting
-    end
-
-    rect rgb(40, 30, 30)
-        Note right of Sensor: 2. Cryptographic Ledger
-        MCU->>Storage: Retrieve Previous SHA-256 Hash
-        MCU->>MCU: Calculate New SHA-256(Telemetry + PrevHash)
-        MCU->>Storage: Store New Running Hash (Wear Leveling)
-        MCU->>NFC: Update NDEF Text Record with Crypto Signature
-    end
-
-    rect rgb(30, 50, 40)
-        Note right of Sensor: 3. Telemetry Transmission
-        alt Threshold Breached (e.g. Temp > 8°C)
-            MCU->>Crypto: Request ECDSA P-256 Signature of Hash
-            activate Crypto
-            Crypto-->>MCU: 64-byte Signature
-            deactivate Crypto
-            MCU->>LoRa: Load Cayenne LPP + Signature
-            LoRa->>Gateway: LoRaWAN Class A Transmission (865MHz)
-            Gateway->>Backend: Webhook Forwarding
-            Backend->>Dash: WebSocket Real-time Alert
-            Dash-->>Dash: UI Flash & Red Marker Update
-        else Normal Conditions
-            MCU->>MCU: Sleep Config: Enter ESP32 Deep Sleep
-        end
-    end
+    %% Styling linkages
+    linkStyle default stroke:#94A3B8,stroke-width:2px,color:#E2E8F0,font-size:12px;
 ```
 
 ---
