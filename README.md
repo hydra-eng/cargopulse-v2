@@ -73,23 +73,54 @@ Cryo Sentinel follows four core tenets of industrial design harmony and engineer
 ### Hardware Block Diagram
 
 ```mermaid
-graph TD
-    subgraph Cryo Sentinel Device
-        MCU[ESP32-C3-MINI-1 MCU]
-        SHT[SHT40 Temp/Hum Sensor] -- I2C --> MCU
-        ATECC[ATECC608A Secure Element] -- I2C --> MCU
-        MAX17048[MAX17048 Fuel Gauge] -- I2C --> MCU
-        ST25DV[ST25DV Dynamic NFC] -- I2C --> MCU
-        ADXL[ADXL345 3-Axis Accel] -- SPI --> MCU
-        DISP[1.54" E-Ink Display] -- SPI --> MCU
-        SX1262[SX1262 LoRa Module] -- SPI --> MCU
-        GPS[u-blox MAX-M10S GPS] -- UART --> MCU
-        POWER[LiPo Battery 1000mAh] --> LDO[AMS1117 3.3V LDO] --> MCU
-        CHARGE[TP4056 USB-C Charger] --> POWER
-        TAMPER[Tamper Detection Loop] -- GPIO0 --> MCU
-        BUZZER[Buzzer] -- GPIO11 --> MCU
-        RGB[RGB Status LED] -- GPIO12-14 --> MCU
+graph LR
+    classDef mcu fill:#1a1a1a,stroke:#4CAF50,stroke-width:2px,color:#fff
+    classDef sensor fill:#2a2a2a,stroke:#2196F3,stroke-width:1px,color:#fff
+    classDef comms fill:#2a2a2a,stroke:#FF9800,stroke-width:1px,color:#fff
+    classDef pwr fill:#2a2a2a,stroke:#F44336,stroke-width:1px,color:#fff
+    classDef security fill:#2a2a2a,stroke:#9C27B0,stroke-width:1px,color:#fff
+
+    subgraph Core Processing
+        MCU[ESP32-C3-MINI-1<br>RISC-V MCU]:::mcu
+        DISP[1.54" E-Ink<br>Zero-Power Display]:::sensor
     end
+
+    subgraph Environmental Sensors
+        SHT[SHT40<br>Temp/Hum]:::sensor
+        ADXL[ADXL345<br>3-Axis Accel]:::sensor
+        TAMPER[Physical Tamper<br>Detect Loop]:::sensor
+    end
+
+    subgraph Cryptography
+        ATECC[ATECC608A<br>Secure Element]:::security
+    end
+
+    subgraph Connectivity & Telemetry
+        SX1262[SX1262<br>LoRa Module]:::comms
+        GPS[u-blox MAX-M10S<br>GPS Receiver]:::comms
+        ST25DV[ST25DV<br>Dynamic NFC]:::comms
+    end
+
+    subgraph Power Management
+        POWER[1000mAh LiPo<br>Battery]:::pwr
+        CHARGE[TP4056<br>USB-C Charger]:::pwr
+        MAX17048[MAX17048<br>Fuel Gauge]:::pwr
+        LDO[AMS1117<br>3.3V LDO]:::pwr
+    end
+
+    SHT -- I2C --> MCU
+    ADXL -- SPI --> MCU
+    TAMPER -- GPIO0 --> MCU
+    ATECC -- I2C --> MCU
+    SX1262 -- SPI --> MCU
+    GPS -- UART --> MCU
+    ST25DV -- I2C --> MCU
+    DISP -- SPI --> MCU
+    MAX17048 -- I2C --> MCU
+
+    CHARGE --> POWER
+    POWER --> LDO
+    LDO --> MCU
 ```
 
 ### Visual Showcases
@@ -109,7 +140,7 @@ The dashboard displays real-time state changes as the cargo travels, transitioni
 #### 🔌 PCB Design & Schematic Layout
 * **Schematic Design Layout**: Below is the fully updated schematic overview for pinouts, bus routing, and secure element integration.
   
-  ![Cryo Sentinel Schematic](docs/images/cryosentinel_schematic.svg)
+  ![Cryo Sentinel Schematic](docs/images/cryosentinel_schematic.png)
 
 * **PCB Layout View**: Rendered 2D board view demonstrating compact trace routing, component grouping, and antenna placement.
   
@@ -129,16 +160,34 @@ The firmware runs a low-power, event-driven state machine on the ESP32-C3 microc
 
 ```mermaid
 stateDiagram-v2
+    direction TB
+    
     [*] --> STATE_IDLE
-    STATE_IDLE --> STATE_SAMPLING : Sample Interval / Wakeup
-    STATE_SAMPLING --> STATE_IDLE : Thresholds OK (Hash Ledger updated)
-    STATE_SAMPLING --> STATE_BREACH_ALERT : Threshold Crossed / Tamper
-    STATE_BREACH_ALERT --> STATE_IDLE : Alert Dispatched & Buffered
-    STATE_IDLE --> STATE_NFC_SERVE : NFC Field Detected / GPO Interrupt
-    STATE_NFC_SERVE --> STATE_IDLE : Session Complete
-    STATE_SAMPLING --> STATE_SLEEP : Battery < 5%
+    
+    note right of STATE_IDLE
+        Deep Sleep (150µA)
+        RTC Timer Active
+    end note
+    
+    STATE_IDLE --> STATE_SAMPLING : Wakeup Interval
+    STATE_IDLE --> STATE_NFC_SERVE : NFC Field Detected
     STATE_IDLE --> STATE_SLEEP : Battery < 5%
-    STATE_SLEEP --> [*] : Battery Depleted
+    
+    state STATE_SAMPLING {
+        [*] --> ReadSensors
+        ReadSensors --> GPSHotStart
+        GPSHotStart --> UpdateHashLedger
+        UpdateHashLedger --> CheckThresholds
+    }
+    
+    STATE_SAMPLING --> STATE_BREACH_ALERT : Limit Exceeded / Tamper
+    STATE_SAMPLING --> STATE_IDLE : Environment OK
+    STATE_SAMPLING --> STATE_SLEEP : Battery < 5%
+    
+    STATE_BREACH_ALERT --> STATE_IDLE : Alert Queued/Sent via LoRa
+    STATE_NFC_SERVE --> STATE_IDLE : Configuration Read
+    
+    STATE_SLEEP --> [*] : Hibernation
 ```
 
 ### Key Operational States
@@ -156,24 +205,42 @@ Every alert transmitted by the device contains cryptographic signatures to guara
 
 ```mermaid
 sequenceDiagram
-    participant Sensors as Onboard Sensors
-    participant MCU as ESP32-C3 MCU
-    participant Crypto as ATECC608A Secure Element
-    participant LoRa as SX1262 LoRa TX
-    participant GW as LoRa Gateway
-    participant Dash as Web Dashboard
+    autonumber
+    participant Sensor as SHT40 & GPS
+    participant MCU as ESP32-C3 Core
+    participant Crypto as ATECC608A
+    participant Storage as SPI Flash
+    participant LoRa as SX1262 Transceiver
+    participant Dash as Enterprise Dashboard
 
-    Sensors->>MCU: Read Temp, Hum, Shock, GPS
-    Note over MCU: Hash log entry & calculate SHA-256 ledger chain
-    Note over MCU: Threshold check: Breach Detected!
-    MCU->>Crypto: Send Chain Hash
-    Crypto->>Crypto: Sign Hash with Private Key (ECDSA P-256)
-    Crypto->>MCU: Return 64-byte Signature
-    MCU->>LoRa: Send Payload + Signature
-    LoRa->>GW: Transmit RF Alert (865 MHz Band)
-    GW->>Dash: Forward Data & Signature
-    Note over Dash: Verify Signature with Device Public Key
-    Dash->>Dash: Update Map & Trigger Live Breach Alarm
+    rect rgb(30, 40, 50)
+        Note right of Sensor: 1. Environmental Audit Phase
+        MCU->>Sensor: Request Environment & Location Data
+        Sensor-->>MCU: Return Temp, Humidity, GPS Coords
+        MCU->>MCU: Format Log String & SHA-256 Hash
+    end
+
+    rect rgb(40, 30, 30)
+        Note right of Sensor: 2. Cryptographic Sealing Phase
+        MCU->>Crypto: Transmit Log Hash for Signing
+        activate Crypto
+        Crypto->>Crypto: ECDSA P-256 Signature Generation
+        Crypto-->>MCU: Return 64-byte Crypto Signature
+        deactivate Crypto
+        MCU->>Storage: Append Signed Ledger Entry
+    end
+
+    rect rgb(30, 50, 40)
+        Note right of Sensor: 3. Telemetry Transmission Phase
+        alt Threshold Breached
+            MCU->>LoRa: Wake & Load Alert Payload + Signature
+            LoRa->>Dash: LoRaWAN 865MHz Transmission
+            Dash->>Dash: Verify P-256 Signature using PubKey
+            Dash-->>Dash: Trigger Live UI Breach Alarm
+        else Normal Conditions
+            MCU->>MCU: Enter Deep Sleep (RTC Wakeup)
+        end
+    end
 ```
 
 ---
