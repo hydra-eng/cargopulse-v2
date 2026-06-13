@@ -82,7 +82,7 @@ graph LR
 
     subgraph Core Processing
         MCU[ESP32-C3-MINI-1<br>RISC-V MCU]:::mcu
-        DISP[1.54" E-Ink<br>Zero-Power Display]:::sensor
+        DISP[1.54-inch E-Ink<br>Zero-Power Display]:::sensor
     end
 
     subgraph Environmental Sensors
