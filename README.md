@@ -135,7 +135,7 @@ The dashboard displays real-time state changes as the cargo travels, transitioni
 
 | Normal Operation | Warning Threshold | Critical Breach Alert |
 | :---: | :---: | :---: |
-| ![Timeline Normal](docs/images/media_1.png) | ![Timeline Warning](docs/images/media_2.png) | ![Timeline Breach](docs/images/media_3.png) |
+| ![Timeline Normal](docs/images/timeline_normal.png) | ![Timeline Warning](docs/images/timeline_warning.png) | ![Timeline Breach](docs/images/timeline_breach.png) |
 
 #### 🔌 PCB Design & Schematic Layout
 * **Schematic Design Layout**: Below is the fully updated schematic overview for pinouts, bus routing, and secure element integration.
