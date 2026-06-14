@@ -69,54 +69,62 @@ Cryo Sentinel follows four core tenets of industrial design harmony and engineer
 ### Hardware Block Diagram
 
 ```mermaid
-graph LR
-    classDef mcu fill:#1a1a1a,stroke:#4CAF50,stroke-width:2px,color:#fff
-    classDef sensor fill:#2a2a2a,stroke:#2196F3,stroke-width:1px,color:#fff
-    classDef comms fill:#2a2a2a,stroke:#FF9800,stroke-width:1px,color:#fff
-    classDef pwr fill:#2a2a2a,stroke:#F44336,stroke-width:1px,color:#fff
-    classDef security fill:#2a2a2a,stroke:#9C27B0,stroke-width:1px,color:#fff
+flowchart TD
+    %% Custom Styling
+    classDef mcu fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff,rx:8px,ry:8px;
+    classDef env fill:#1e293b,stroke:#0ea5e9,stroke-width:2px,color:#fff,rx:8px,ry:8px;
+    classDef comms fill:#1e293b,stroke:#f59e0b,stroke-width:2px,color:#fff,rx:8px,ry:8px;
+    classDef pwr fill:#1e293b,stroke:#ef4444,stroke-width:2px,color:#fff,rx:8px,ry:8px;
+    classDef sec fill:#1e293b,stroke:#8b5cf6,stroke-width:2px,color:#fff,rx:8px,ry:8px;
 
-    subgraph Core Processing
-        MCU[ESP32-C3-MINI-1<br>RISC-V MCU]:::mcu
-        DISP[1.54-inch E-Ink<br>Zero-Power Display]:::sensor
+    %% Nodes
+    subgraph EdgeCompute[Core Processing Engine]
+        direction TB
+        MCU[ESP32-C3-MINI-1<br>RISC-V @ 160MHz]:::mcu
+        DISP[1.54 E-Ink Display<br>Zero-Power Memory]:::env
+        FLASH[AT25SL321 32Mbit<br>SPI NOR Flash]:::sec
     end
 
-    subgraph Environmental Sensors
-        SHT[SHT40<br>Temp/Hum]:::sensor
-        ADXL[ADXL345<br>3-Axis Accel]:::sensor
-        TAMPER[Physical Tamper<br>Detect Loop]:::sensor
+    subgraph Sens[Environmental & Security]
+        SHT[SHT40<br>Temp & Hum]:::env
+        ADXL[ADXL345<br>3-Axis Shock]:::env
+        TAMPER[Tamper Loop<br>GPIO0 Interrupt]:::env
     end
 
-    subgraph Cryptography
-        ATECC[ATECC608A<br>Secure Element]:::security
+    subgraph RF[Connectivity & Telemetry]
+        SX[SX1262 LoRa<br>Sub-GHz 865MHz]:::comms
+        GPS[u-blox MAX-M10S<br>L1 GNSS]:::comms
+        NFC[ST25DV04K<br>Dynamic NFC Tag]:::comms
     end
 
-    subgraph Connectivity & Telemetry
-        SX1262[SX1262<br>LoRa Module]:::comms
-        GPS[u-blox MAX-M10S<br>GPS Receiver]:::comms
-        ST25DV[ST25DV<br>Dynamic NFC]:::comms
+    subgraph Crypto[Trust Anchor]
+        ATECC[ATECC608A<br>ECDSA P-256 Signer]:::sec
     end
 
-    subgraph Power Management
-        POWER[1000mAh LiPo<br>Battery]:::pwr
-        CHARGE[TP4056<br>USB-C Charger]:::pwr
-        MAX17048[MAX17048<br>Fuel Gauge]:::pwr
-        LDO[AMS1117<br>3.3V LDO]:::pwr
+    subgraph Power[Power Management Subsystem]
+        BATT[1000mAh LiPo]:::pwr
+        CHG[TP4056 USB-C]:::pwr
+        FUEL[MAX17048 Gauge]:::pwr
+        LDO[3.3V LDO Regulator]:::pwr
     end
 
-    SHT -- I2C --> MCU
-    ADXL -- SPI --> MCU
-    TAMPER -- GPIO0 --> MCU
-    ATECC -- I2C --> MCU
-    SX1262 -- SPI --> MCU
-    GPS -- UART --> MCU
-    ST25DV -- I2C --> MCU
-    DISP -- SPI --> MCU
-    MAX17048 -- I2C --> MCU
-
-    CHARGE --> POWER
-    POWER --> LDO
-    LDO --> MCU
+    %% Wiring
+    Sens -->|I2C / SPI / GPIO| MCU
+    MCU -->|SPI| DISP
+    MCU <-->|SPI Bus| FLASH
+    MCU <-->|SPI (Encrypted Payload)| SX
+    GPS -->|UART (NMEA)| MCU
+    MCU <-->|I2C (NDEF)| NFC
+    MCU <-->|I2C (Signature Request)| ATECC
+    
+    CHG -->|Charge| BATT
+    BATT -->|Monitor| FUEL
+    FUEL -->|I2C| MCU
+    BATT --> LDO
+    LDO -->|3V3 Rail| MCU
+    
+    %% Link styles
+    linkStyle default stroke:#64748b,stroke-width:2px,color:#cbd5e1;
 ```
 
 ### Visual Showcases
@@ -224,19 +232,20 @@ graph LR
     end
 
     %% Flow
-    Sensors -- "1. Raw Telemetry" --> MCU
-    MCU -- "2. Hash Generation" --> Flash
-    MCU -- "3. Signature Request" --> Crypto
-    Crypto -- "4. ECDSA P-256 Signature" --> MCU
-    MCU -- "5. Cayenne LPP Payload" --> LoRa
+    Sensors -- "1. Raw Telemetry\n(I2C/SPI)" --> MCU
+    MCU -- "2. Format Cayennne LPP\n& Hash Payload" --> Flash
+    MCU -- "3. Request ECDSA-P256\nSignature" --> Crypto
+    Crypto -- "4. Signed Hash\nReturned" --> MCU
+    MCU -- "5. Encrypted Uplink\n(SPI)" --> LoRa
     
-    LoRa -- "6. LoRaWAN 865MHz" --> TTN
+    LoRa =="6. LoRaWAN 865MHz\n(Long Range)"==> TTN
     
-    TTN -- "7. Webhook Event" --> FastAPI
-    FastAPI -- "8. WebSocket Stream" --> Dash
+    TTN -- "7. Webhook Event\n(HTTPS)" --> FastAPI
+    FastAPI =="8. WebSocket Stream\n(Real-time)"==> Dash
 
     %% Styling linkages
-    linkStyle default stroke:#94A3B8,stroke-width:2px,color:#E2E8F0,font-size:12px;
+    linkStyle default stroke:#64748B,stroke-width:2px,color:#334155,font-size:12px;
+    linkStyle 5,7 stroke:#10B981,stroke-width:3px,color:#047857,font-size:13px;
 ```
 
 ---
@@ -329,4 +338,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 3D Device Visualization
 
-![Cryo Sentinel 3D PCB Render](docs/images/pcb_3d_isolated.png)
+![Cryo Sentinel 3D PCB Render](docs/images/pcb_3d_nobg.png)
