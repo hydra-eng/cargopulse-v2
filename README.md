@@ -144,7 +144,7 @@ The dashboard displays real-time state changes as the cargo travels, transitioni
 #### 🔌 PCB Design & Schematic Layout
 * **Schematic Design Layout**: Below is the fully updated schematic overview for pinouts, bus routing, and secure element integration.
   
-  ![Cryo Sentinel Schematic](assets/cryosentinel_schematic.svg)
+  ![Cryo Sentinel Schematic](assets/cryosentinel_schematic_final.svg)
 
 * **PCB Layout View**: Rendered 2D board view demonstrating compact trace routing, component grouping, and antenna placement.
   
