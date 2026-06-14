@@ -132,7 +132,7 @@ flowchart TD
 #### 📱 Web Dashboard Demo
 An enterprise-grade monitoring console showing live breach telemetry, transit routes, and cryptographic signature validation. Open [demo_dashboard.html](docs/demo_dashboard.html) in any web browser.
 
-![Dashboard Demo](docs/images/dashboard_demo.png)
+![Dashboard Demo](assets/dashboard_demo.png)
 
 #### 🗺 Live Timeline States
 The dashboard displays real-time state changes as the cargo travels, transitioning from normal operations, warning thresholds, to critical alerts upon breach.
@@ -144,7 +144,7 @@ The dashboard displays real-time state changes as the cargo travels, transitioni
 #### 🔌 PCB Design & Schematic Layout
 * **Schematic Design Layout**: Below is the fully updated schematic overview for pinouts, bus routing, and secure element integration.
   
-  ![Cryo Sentinel Schematic](docs/images/kicad_schematic.svg)
+  ![Cryo Sentinel Schematic](assets/cryosentinel_schematic.svg)
 
 * **PCB Layout View**: Rendered 2D board view demonstrating compact trace routing, component grouping, and antenna placement.
   
@@ -208,44 +208,38 @@ stateDiagram-v2
 Every alert transmitted by the device contains cryptographic signatures to guarantee data authenticity and prevent record tampering.
 
 ```mermaid
-graph LR
-    %% Styles
-    classDef hardware fill:#1E293B,stroke:#3B82F6,stroke-width:2px,color:#fff,rx:8px,ry:8px;
-    classDef cloud fill:#334155,stroke:#10B981,stroke-width:2px,color:#fff,rx:8px,ry:8px;
-
-    %% Hardware Components
-    subgraph Edge_Device [Cryo Sentinel Edge Hardware]
+graph TD
+    %% Styling
+    classDef edge fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff,rx:8px,ry:8px;
+    classDef cloud fill:#1e293b,stroke:#10b981,stroke-width:2px,color:#fff,rx:8px,ry:8px;
+    classDef client fill:#1e293b,stroke:#f59e0b,stroke-width:2px,color:#fff,rx:8px,ry:8px;
+    
+    subgraph Edge ["❄️ Edge Operations (Cryo Sentinel)"]
         direction TB
-        Sensors[Temp / Shock / GPS]:::hardware
-        MCU[ESP32-C3 Processor]:::hardware
-        Crypto[ATECC608A Secure Element]:::hardware
-        Flash[RTC Memory / Flash Ledger]:::hardware
-        LoRa[SX1262 Transceiver]:::hardware
+        A[Sensors Read<br/>Temp/Shock/GPS]:::edge --> B[MCU Packages<br/>Cayenne LPP Data]:::edge
+        B --> C[ATECC608A Signs<br/>Hash Payload]:::edge
+        C --> D[Save to<br/>SPI NOR Flash]:::edge
+        C --> E[Transmit via<br/>SX1262 LoRa]:::edge
     end
 
-    %% Cloud Components
-    subgraph Cloud_Backend [Enterprise Cloud Infrastructure]
-        direction TB
-        TTN[The Things Network]:::cloud
-        FastAPI[Python FastAPI Backend]:::cloud
-        Dash[Live Web Dashboard]:::cloud
+    subgraph Network ["📡 Connectivity"]
+        E == "LoRaWAN 865MHz" ==> F[TTN Gateway]:::cloud
+        F -.-> G[The Things Network<br/>LNS]:::cloud
     end
 
-    %% Flow
-    Sensors -- "1. Raw Telemetry\n(I2C/SPI)" --> MCU
-    MCU -- "2. Format Cayennne LPP\n& Hash Payload" --> Flash
-    MCU -- "3. Request ECDSA-P256\nSignature" --> Crypto
-    Crypto -- "4. Signed Hash\nReturned" --> MCU
-    MCU -- "5. Encrypted Uplink\n(SPI)" --> LoRa
-    
-    LoRa =="6. LoRaWAN 865MHz\n(Long Range)"==> TTN
-    
-    TTN -- "7. Webhook Event\n(HTTPS)" --> FastAPI
-    FastAPI =="8. WebSocket Stream\n(Real-time)"==> Dash
+    subgraph Cloud ["☁️ Cloud Backend"]
+        G -- "Webhook" --> H[FastAPI Backend]:::cloud
+        H --> I[(PostgreSQL DB)]:::cloud
+    end
 
-    %% Styling linkages
-    linkStyle default stroke:#64748B,stroke-width:2px,color:#334155,font-size:12px;
-    linkStyle 5,7 stroke:#10B981,stroke-width:3px,color:#047857,font-size:13px;
+    subgraph Client ["💻 End-User View"]
+        H == "WebSocket" ==> J[Live React Dashboard]:::client
+        J --> K[Signature Validation<br/>& Maps]:::client
+    end
+    
+    %% Link styles
+    linkStyle 4 stroke:#3b82f6,stroke-width:3px,color:#fff;
+    linkStyle 7 stroke:#10b981,stroke-width:3px,color:#fff;
 ```
 
 ---
@@ -338,5 +332,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 3D Device Visualization
 
-![Cryo Sentinel 3D PCB Render](<img width="500" height="500" alt="pcb_3d_nobg-removebg-preview" src="https://github.com/user-attachments/assets/248efe73-9483-4157-b367-a1c4686bdd70" />
-)
+![Cryo Sentinel 3D PCB Render](<img width="500" height="500" alt="pcb_3d_nobg-removebg-preview" src="https://github.com/user-attachments/assets/248efe73-9483-4157-b367-a1c4686bdd70" />)
